@@ -328,9 +328,9 @@ public class StorageHelper {
      */
     synchronized SecretKey loadSecretKeyForDecryption(String keyVersion)
             throws GeneralSecurityException, IOException {
-        if (mSecretKeyFromAndroidKeyStore != null) {
-            return mSecretKeyFromAndroidKeyStore;
-        }
+//        if (mSecretKeyFromAndroidKeyStore != null) {
+//            return mSecretKeyFromAndroidKeyStore;
+//        }
 
         return getKey(keyVersion);
     }
@@ -347,9 +347,9 @@ public class StorageHelper {
      */
     private synchronized SecretKey getKeyOrCreate(final String keyVersion)
             throws GeneralSecurityException, IOException {
-        if (VERSION_USER_DEFINED.equals(keyVersion)) {
-            return getSecretKey(AuthenticationSettings.INSTANCE.getSecretKeyData());
-        }
+//        if (VERSION_USER_DEFINED.equals(keyVersion)) {
+//            return getSecretKey(AuthenticationSettings.INSTANCE.getSecretKeyData());
+//        }
 
         try {
             mSecretKeyFromAndroidKeyStore = getKey(keyVersion);
@@ -357,7 +357,7 @@ public class StorageHelper {
             Logger.v(TAG, "Key does not exist in AndroidKeyStore, try to generate new keys.");
         }
 
-        if (mSecretKeyFromAndroidKeyStore == null) {
+//        if (mSecretKeyFromAndroidKeyStore == null) {
             // If encountering exception for reading keys, try to generate new keys
             mKeyPair = generateKeyPairFromAndroidKeyStore();
             
@@ -365,7 +365,7 @@ public class StorageHelper {
             mSecretKeyFromAndroidKeyStore = generateSecretKey();
             final byte[] keyWrapped = wrap(mSecretKeyFromAndroidKeyStore);
             writeKeyData(keyWrapped);
-        }
+//        }
 
         return mSecretKeyFromAndroidKeyStore;
     }
@@ -394,14 +394,14 @@ public class StorageHelper {
     }
 
     @TargetApi(Build.VERSION_CODES.JELLY_BEAN_MR2)
-    private synchronized KeyPair generateKeyPairFromAndroidKeyStore()
+    private KeyPair generateKeyPairFromAndroidKeyStore()
             throws GeneralSecurityException, IOException {
         final KeyStore keyStore = KeyStore.getInstance(ANDROID_KEY_STORE);
         keyStore.load(null);
 
         Logger.v(TAG, "Generate KeyPair from AndroidKeyStore");
-        final Calendar start = Calendar.getInstance();
-        final Calendar end = Calendar.getInstance();
+        final Calendar start = Calendar.getInstance(Locale.US);
+        final Calendar end = Calendar.getInstance(Locale.US);
         final int certValidYears = 100;
         end.add(Calendar.YEAR, certValidYears);
 
@@ -412,7 +412,8 @@ public class StorageHelper {
         generator.initialize(getKeyPairGeneratorSpec(mContext, start.getTime(), end.getTime()));
         try {
             return generator.generateKeyPair();
-        } catch (final IllegalStateException exception) {
+        } catch (final IllegalStateException | IllegalArgumentException exception) {
+            // IllegalStateException:
             // There is an issue with AndroidKeyStore when attempting to generate keypair
             // if user doesn't have pin/passphrase setup for their lock screen. 
             // Issue 177459 : AndroidKeyStore KeyPairGenerator fails to generate 
@@ -422,6 +423,12 @@ public class StorageHelper {
             // The thrown exception in this case is: 
             // java.lang.IllegalStateException: could not generate key in keystore
             // To avoid app crashing, re-throw as checked exception
+
+            // IlegalArgumentException:
+            // There is an issue with generating key pair on devices with Arabic or Farse local
+            // Throwing an exception with invalid date
+            // https://code.google.com/p/android/issues/detail?id=228196
+
             ClientAnalytics.logEvent(new AndroidKeyStoreFailureEvent(
                     new InstrumentationPropertiesBuilder(exception)));
             throw new KeyStoreException(exception);
